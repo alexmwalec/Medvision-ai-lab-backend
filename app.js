@@ -208,7 +208,7 @@ const normalizePatient = (row, findings = []) => ({
   createdAt: row.created_at,
   updatedAt: row.updated_at
 });
-
+ 
 const normalizeFinding = (row) => ({
   id: row.id,
   name: row.name,
@@ -374,27 +374,39 @@ VALUES (?, ?, ?, ?, ?, 'Chest X-ray', ?, ?, ?, 'pending', ?)
 
       // Get the inserted patient
       const [patientRows] = await connection.query(
-        "SELECT * FROM patients WHERE id = LAST_INSERT_ID()"
+        "SELECT * FROM patients WHERE id = ?"
       );
       const patient = patientRows[0];
       const insertedFindings = [];
 
       for (const finding of findings) {
-        const [findingResult] = await connection.query(
-          `INSERT INTO findings (patient_id, name, probability, color, description, recommendations)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [
-            patient.id,
-            finding.name,
-            finding.probability,
-            finding.color,
-            finding.description,
-            JSON.stringify(finding.recommendations)
-          ]
-        );
+        const findingId = randomUUID();
 
+await connection.query(
+`
+INSERT INTO findings(
+ id,
+ patient_id,
+ name,
+ probability,
+ color,
+ description,
+ recommendations
+)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+`,
+[
+ findingId,
+ patientUUID,
+ finding.name,
+ finding.probability,
+ finding.color,
+ finding.description,
+ JSON.stringify(finding.recommendations)
+]
+);
         const [findingRows] = await connection.query(
-          "SELECT * FROM findings WHERE id = LAST_INSERT_ID()"
+          "SELECT * FROM findings WHERE id = ?"
         );
         insertedFindings.push(normalizeFinding(findingRows[0]));
       }
@@ -524,7 +536,7 @@ app.post("/feedback", requireDatabase, asyncHandler(async (req, res) => {
 
   const connection = await pool.getConnection();
   try {
-    const [feedbackResult] = await connection.query(
+      const feedbackId = randomUUID();
       `INSERT INTO feedback (
         patient_id, type, status, consultation_notes, selected_findings, confidence_level, payload
       )
@@ -538,7 +550,7 @@ app.post("/feedback", requireDatabase, asyncHandler(async (req, res) => {
         confidenceLevel || null,
         JSON.stringify(req.body)
       ]
-    );
+    
 
     if (patientId && status) {
       await connection.query(
@@ -555,7 +567,7 @@ app.post("/feedback", requireDatabase, asyncHandler(async (req, res) => {
     }
 
     const [feedbackRows] = await connection.query(
-      "SELECT * FROM feedback WHERE id = LAST_INSERT_ID()"
+      "SELECT * FROM feedback WHERE id = ?"
     );
 
     return res.status(201).json({ feedback: feedbackRows[0] });
