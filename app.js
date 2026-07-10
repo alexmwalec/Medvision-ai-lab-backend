@@ -164,7 +164,7 @@ const initDatabase = async () => {
   const connection = await pool.getConnection();
   
   try {
-    // Check if tables exist instead of creating them
+    // Check if tables exist
     const [tables] = await connection.query(`
       SELECT COUNT(*) as count 
       FROM information_schema.tables 
@@ -173,17 +173,17 @@ const initDatabase = async () => {
     `);
 
     if (tables[0].count < 3) {
-      console.log(" Some tables are missing. Please run the SQL script manually.");
+      console.log("Some tables are missing. Please run the SQL script manually.");
       console.log("Run: mysql -u root -p medvision < create_tables.sql");
     } else {
-      console.log("All tables exist!!");
+      console.log(" All tables exist!");
     }
 
     // Test connection
     await connection.query("SELECT 1");
     
   } catch (error) {
-    console.error("Database connection error:", error.message);
+    console.error(" Database connection error:", error.message);
     throw error;
   } finally {
     connection.release();
@@ -333,48 +333,47 @@ app.post(
 
     const findings = runCxrModel(req.body);
     const priority = inferPriority(findings);
+    const patientUUID = randomUUID();
 
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
 
-      const patientUUID = randomUUID();
-
-const [patientResult] = await connection.query(
-`
-INSERT INTO patients (
- id,
- external_patient_id,
- name,
- age,
- gender,
- scan_type,
- scan_date,
- clinical_symptoms,
- clinical_history,
- image_path,
- status,
- priority
-)
-VALUES (?, ?, ?, ?, ?, 'Chest X-ray', ?, ?, ?, 'pending', ?)
-`,
-[
- patientUUID,
- req.body.patientId || null,
- req.body.name.trim(),
- Number(req.body.age),
- req.body.gender.trim(),
- req.body.date,
- req.body.clinicalSymptoms || null,
- req.body.clinicalHistory || null,
- imageUrl,
- priority
-]
-);
+      // Use req.file.path instead of imageUrl
+      const [patientResult] = await connection.query(
+        `INSERT INTO patients (
+          id,
+          external_patient_id,
+          name,
+          age,
+          gender,
+          scan_type,
+          scan_date,
+          clinical_symptoms,
+          clinical_history,
+          image_path,
+          status,
+          priority
+        )
+        VALUES (?, ?, ?, ?, ?, 'Chest X-ray', ?, ?, ?, ?, 'pending', ?)`,
+        [
+          patientUUID,
+          req.body.patientId || null,
+          req.body.name.trim(),
+          Number(req.body.age),
+          req.body.gender.trim(),
+          req.body.date,
+          req.body.clinicalSymptoms || null,
+          req.body.clinicalHistory || null,
+          req.file.path,  // Use req.file.path
+          priority
+        ]
+      );
 
       // Get the inserted patient
       const [patientRows] = await connection.query(
-        "SELECT * FROM patients WHERE id = ?"
+        "SELECT * FROM patients WHERE id = ?",
+        [patientUUID]
       );
       const patient = patientRows[0];
       const insertedFindings = [];
@@ -382,31 +381,31 @@ VALUES (?, ?, ?, ?, ?, 'Chest X-ray', ?, ?, ?, 'pending', ?)
       for (const finding of findings) {
         const findingId = randomUUID();
 
-await connection.query(
-`
-INSERT INTO findings(
- id,
- patient_id,
- name,
- probability,
- color,
- description,
- recommendations
-)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-`,
-[
- findingId,
- patientUUID,
- finding.name,
- finding.probability,
- finding.color,
- finding.description,
- JSON.stringify(finding.recommendations)
-]
-);
+        await connection.query(
+          `INSERT INTO findings (
+            id,
+            patient_id,
+            name,
+            probability,
+            color,
+            description,
+            recommendations
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            findingId,
+            patientUUID,
+            finding.name,
+            finding.probability,
+            finding.color,
+            finding.description,
+            JSON.stringify(finding.recommendations)
+          ]
+        );
+        
         const [findingRows] = await connection.query(
-          "SELECT * FROM findings WHERE id = ?"
+          "SELECT * FROM findings WHERE id = ?",
+          [findingId]
         );
         insertedFindings.push(normalizeFinding(findingRows[0]));
       }
@@ -536,12 +535,22 @@ app.post("/feedback", requireDatabase, asyncHandler(async (req, res) => {
 
   const connection = await pool.getConnection();
   try {
-      const feedbackId = randomUUID();
+    const feedbackId = randomUUID();
+
+    await connection.query(
       `INSERT INTO feedback (
-        patient_id, type, status, consultation_notes, selected_findings, confidence_level, payload
+        id,
+        patient_id,
+        type,
+        status,
+        consultation_notes,
+        selected_findings,
+        confidence_level,
+        payload
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        feedbackId,
         patientId || null,
         type,
         status || null,
@@ -550,7 +559,7 @@ app.post("/feedback", requireDatabase, asyncHandler(async (req, res) => {
         confidenceLevel || null,
         JSON.stringify(req.body)
       ]
-    
+    );
 
     if (patientId && status) {
       await connection.query(
@@ -567,7 +576,8 @@ app.post("/feedback", requireDatabase, asyncHandler(async (req, res) => {
     }
 
     const [feedbackRows] = await connection.query(
-      "SELECT * FROM feedback WHERE id = ?"
+      "SELECT * FROM feedback WHERE id = ?",
+      [feedbackId]
     );
 
     return res.status(201).json({ feedback: feedbackRows[0] });
@@ -605,7 +615,7 @@ const start = async () => {
   try {
     await initDatabase();
     dbReady = true;
-    console.log("MySQL schema is ready.");
+    console.log(" MySQL schema is ready.");
   } catch (error) {
     dbReady = false;
     console.error("MySQL initialization failed:", error.message);
@@ -617,7 +627,7 @@ const start = async () => {
   }
 
   app.listen(PORT, () => {
-    console.log(` Backend API running at http://localhost:${PORT}`);
+    console.log(`Backend API running at http://localhost:${PORT}`);
     console.log(`Allowed frontend origin(s): ${Array.from(allowedOrigins).join(", ")}`);
   });
 };
