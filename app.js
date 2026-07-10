@@ -338,24 +338,39 @@ app.post(
     try {
       await connection.beginTransaction();
 
-      const [patientResult] = await connection.query(
-        `INSERT INTO patients (
-          external_patient_id, name, age, gender, scan_type, scan_date,
-          clinical_symptoms, clinical_history, image_path, status, priority
-        )
-        VALUES (?, ?, ?, ?, 'Chest X-ray', ?, ?, ?, ?, 'pending', ?)`,
-        [
-          req.body.patientId || null,
-          req.body.name.trim(),
-          Number(req.body.age),
-          req.body.gender.trim(),
-          req.body.date,
-          req.body.clinicalSymptoms || null,
-          req.body.clinicalHistory || null,
-          req.file.path,
-          priority
-        ]
-      );
+      const patientUUID = randomUUID();
+
+const [patientResult] = await connection.query(
+`
+INSERT INTO patients (
+ id,
+ external_patient_id,
+ name,
+ age,
+ gender,
+ scan_type,
+ scan_date,
+ clinical_symptoms,
+ clinical_history,
+ image_path,
+ status,
+ priority
+)
+VALUES (?, ?, ?, ?, ?, 'Chest X-ray', ?, ?, ?, 'pending', ?)
+`,
+[
+ patientUUID,
+ req.body.patientId || null,
+ req.body.name.trim(),
+ Number(req.body.age),
+ req.body.gender.trim(),
+ req.body.date,
+ req.body.clinicalSymptoms || null,
+ req.body.clinicalHistory || null,
+ imageUrl,
+ priority
+]
+);
 
       // Get the inserted patient
       const [patientRows] = await connection.query(
