@@ -173,10 +173,28 @@ const initDatabase = async () => {
     `);
 
     if (tables[0].count < 3) {
-      console.log("Some tables are missing. Please run the SQL script manually.");
+      console.log(" Some tables are missing. Please run the SQL script manually.");
       console.log("Run: mysql -u root -p medvision < create_tables.sql");
     } else {
       console.log(" All tables exist!");
+      
+      // Check if bounding_box column exists in findings table
+      const [columns] = await connection.query(`
+        SELECT COUNT(*) as count 
+        FROM information_schema.columns 
+        WHERE table_schema = 'medvision' 
+        AND table_name = 'findings' 
+        AND column_name = 'bounding_box'
+      `);
+      
+      if (columns[0].count === 0) {
+        console.log(" Adding bounding_box column to findings table...");
+        await connection.query(`
+          ALTER TABLE findings 
+          ADD COLUMN bounding_box JSON
+        `);
+        console.log(" bounding_box column added successfully!");
+      }
     }
 
     // Test connection
@@ -215,7 +233,8 @@ const normalizeFinding = (row) => ({
   probability: Number(row.probability),
   color: row.color,
   description: row.description,
-  recommendations: row.recommendations || []
+  recommendations: row.recommendations || [],
+  boundingBox: row.bounding_box || null // Include bounding box
 });
 
 const formatScanDate = (value) => {
@@ -230,6 +249,73 @@ const formatScanDate = (value) => {
   return `${year}-${month}-${day}`;
 };
 
+//  NEW: Generate bounding boxes for findings
+const generateBoundingBoxes = (findings, imageWidth = 512, imageHeight = 512) => {
+  const regions = {
+    "Cardiomegaly": {
+      x: 0.3,
+      y: 0.35,
+      width: 0.4,
+      height: 0.3
+    },
+    "Pneumonia": {
+      x: 0.3,
+      y: 0.3,
+      width: 0.25,
+      height: 0.25
+    },
+    "Pleural Effusion": {
+      x: 0.5,
+      y: 0.6,
+      width: 0.35,
+      height: 0.3
+    },
+    "Tuberculosis Pattern": {
+      x: 0.25,
+      y: 0.15,
+      width: 0.5,
+      height: 0.35
+    },
+    "Nodule": {
+      x: 0.4,
+      y: 0.25,
+      width: 0.2,
+      height: 0.2
+    }
+  };
+
+  return findings.map(finding => {
+    const region = regions[finding.name] || {
+      x: 0.2 + Math.random() * 0.3,
+      y: 0.2 + Math.random() * 0.3,
+      width: 0.3 + Math.random() * 0.2,
+      height: 0.3 + Math.random() * 0.2
+    };
+
+    // Adjust box size based on probability
+    const probabilityFactor = finding.probability / 100;
+    const width = region.width * (0.8 + 0.4 * probabilityFactor);
+    const height = region.height * (0.8 + 0.4 * probabilityFactor);
+    
+    // Slight random variation for more natural look
+    const jitter = 0.02;
+    const x = Math.max(0, Math.min(1 - width, region.x + (Math.random() - 0.5) * jitter));
+    const y = Math.max(0, Math.min(1 - height, region.y + (Math.random() - 0.5) * jitter));
+
+    return {
+      ...finding,
+      boundingBox: {
+        x: Math.round(x * imageWidth),
+        y: Math.round(y * imageHeight),
+        width: Math.round(width * imageWidth),
+        height: Math.round(height * imageHeight),
+        color: finding.color,
+        probability: finding.probability
+      }
+    };
+  });
+};
+
 const runCxrModel = ({ age, clinicalSymptoms = "", clinicalHistory = "" }) => {
   const text = `${clinicalSymptoms} ${clinicalHistory}`.toLowerCase();
   const pneumoniaBoost = /fever|cough|shortness|sputum|chest pain|spo2|oxygen/.test(text) ? 12 : 0;
@@ -240,7 +326,7 @@ const runCxrModel = ({ age, clinicalSymptoms = "", clinicalHistory = "" }) => {
     {
       name: "Pneumonia",
       probability: Math.min(92, 68 + pneumoniaBoost + ageBoost),
-      color: "#EF4444",
+      color: "#EF4444", // Red
       description: "CXR model signal suggests lower-zone air-space opacity requiring clinical correlation.",
       recommendations: [
         "Correlate with symptoms, temperature, and oxygen saturation",
@@ -261,7 +347,7 @@ const runCxrModel = ({ age, clinicalSymptoms = "", clinicalHistory = "" }) => {
     {
       name: "Tuberculosis Pattern",
       probability: Math.min(78, 22 + tbBoost),
-      color: "#F59E0B",
+      color: "#F59E0B", 
       description: "Upper-zone chronic infection pattern is low-to-moderate probability in this analysis.",
       recommendations: [
         "Request sputum testing if clinical symptoms support TB",
@@ -290,9 +376,8 @@ const validateAnalyzeRequest = (body, file) => {
 
   return errors;
 };
-
 app.get("/", (req, res) => {
-  res.json({
+  res.json({ 
     name: "MedVision Backend API",
     version: "1.0.0",
     storage: "MySQL",
@@ -300,7 +385,6 @@ app.get("/", (req, res) => {
     endpoints: ["/health", "/ready", "/analyze_cxr", "/heatmap/:patientId", "/patients", "/feedback"]
   });
 });
-
 app.get("/health", (req, res) => {
   res.json({ ok: true, uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
@@ -331,15 +415,17 @@ app.post(
       return res.status(400).json({ error: "Invalid request", details: errors });
     }
 
+    //  Get findings and add bounding boxes
     const findings = runCxrModel(req.body);
-    const priority = inferPriority(findings);
+    const findingsWithBoxes = generateBoundingBoxes(findings);
+    const priority = inferPriority(findingsWithBoxes);
     const patientUUID = randomUUID();
 
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
 
-      // Use req.file.path instead of imageUrl
+      // Insert patient
       const [patientResult] = await connection.query(
         `INSERT INTO patients (
           id,
@@ -365,7 +451,7 @@ app.post(
           req.body.date,
           req.body.clinicalSymptoms || null,
           req.body.clinicalHistory || null,
-          req.file.path,  // Use req.file.path
+          req.file.path,
           priority
         ]
       );
@@ -378,7 +464,8 @@ app.post(
       const patient = patientRows[0];
       const insertedFindings = [];
 
-      for (const finding of findings) {
+      //  Insert findings with bounding boxes
+      for (const finding of findingsWithBoxes) {
         const findingId = randomUUID();
 
         await connection.query(
@@ -389,9 +476,10 @@ app.post(
             probability,
             color,
             description,
-            recommendations
+            recommendations,
+            bounding_box
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             findingId,
             patientUUID,
@@ -399,7 +487,8 @@ app.post(
             finding.probability,
             finding.color,
             finding.description,
-            JSON.stringify(finding.recommendations)
+            JSON.stringify(finding.recommendations),
+            JSON.stringify(finding.boundingBox) // Store bounding box
           ]
         );
         
@@ -412,9 +501,13 @@ app.post(
 
       await connection.commit();
 
+      //  Return findings with bounding boxes
       return res.status(201).json({
         patient: normalizePatient(patient, insertedFindings),
-        aiFindings: insertedFindings,
+        aiFindings: insertedFindings.map(f => ({
+          ...f,
+          boundingBox: f.boundingBox // Ensure bounding box is included
+        })),
         heatmapUrl: `/heatmap/${patient.id}`,
         message: "CXR analysis completed and stored in MySQL."
       });
@@ -618,7 +711,7 @@ const start = async () => {
     console.log(" MySQL schema is ready.");
   } catch (error) {
     dbReady = false;
-    console.error("MySQL initialization failed:", error.message);
+    console.error(" MySQL initialization failed:", error.message);
     console.error("Please check your MySQL connection settings:");
     console.error(`- Host: ${process.env.MYSQL_HOST || "localhost"}`);
     console.error(`- Port: ${process.env.MYSQL_PORT || 3306}`);
@@ -627,8 +720,8 @@ const start = async () => {
   }
 
   app.listen(PORT, () => {
-    console.log(`Backend API running at http://localhost:${PORT}`);
-    console.log(`Allowed frontend origin(s): ${Array.from(allowedOrigins).join(", ")}`);
+    console.log(` Backend API running at http://localhost:${PORT}`);
+    console.log(` Allowed frontend origin(s): ${Array.from(allowedOrigins).join(", ")}`);
   });
 };
 
