@@ -42,7 +42,7 @@ export const initDatabase = async () => {
       `);
       
       if (columns[0].count === 0) {
-        console.log("📦 Adding bounding_box column to findings table...");
+        console.log("Adding bounding_box column to findings table...");
         await connection.query(`
           ALTER TABLE findings 
           ADD COLUMN bounding_box JSON
