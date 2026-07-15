@@ -117,7 +117,6 @@ export const getPatientById = async (req, res) => {
       "SELECT * FROM patients WHERE id = ?",
       [req.params.id]
     );
-    // ... rest of logic
   } finally {
     connection.release();
   }
