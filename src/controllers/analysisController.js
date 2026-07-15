@@ -68,4 +68,4 @@ export const getPatient = async (req, res) => {
 
   const [findings] = await query("SELECT * FROM findings WHERE patient_id = ?", [req.params.id]);
   res.json({ patient: patients[0], findings });
-};
+}; 
