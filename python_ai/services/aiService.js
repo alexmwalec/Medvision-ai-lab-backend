@@ -38,7 +38,7 @@ export const analyzeWithAI = (patientData) => {
 
     setTimeout(() => {
       python.kill();
-      reject(new Error("AI analysis timeout (30s)"));
-    }, 30000);
+      reject(new Error("AI analysis timeout (5s)"));
+    }, 5000 );
   });
 };
