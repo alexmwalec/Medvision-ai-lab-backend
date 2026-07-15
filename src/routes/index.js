@@ -1,5 +1,5 @@
 import express from "express";
-import { upload } from "../upload";
+import { upload } from "../middleware/upload.js";
 import { analyzeCxr, getPatients, getPatient } from "../controllers/analysisController.js";
 
 
