@@ -104,7 +104,6 @@ export const getPatients = async (req, res) => {
     const [patients] = await connection.query(
       "SELECT * FROM patients ORDER BY created_at DESC LIMIT 100"
     );
-    // ... rest of logic
   } finally {
     connection.release();
   }
