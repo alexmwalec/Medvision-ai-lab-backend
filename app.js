@@ -42,7 +42,6 @@ app.get("/health", (req, res) => {
   });
 });
 
-import routes from "./src/routes/index.js"
 app.use("/api", routes);
 
 

@@ -28,8 +28,7 @@ export { pool };
 export const initDatabase = async () => {
   const connection = await pool.getConnection();
   try {
-    // Check if patients table exists
-    const [tables] = await connection.query(`
+      const [tables] = await connection.query(`
       SELECT COUNT(*) as count 
       FROM information_schema.tables 
       WHERE table_schema = '${process.env.MYSQL_DATABASE || 'medvision'}' 
