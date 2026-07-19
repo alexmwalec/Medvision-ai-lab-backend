@@ -45,6 +45,7 @@ app.get("/health", (req, res) => {
 import routes from "./src/routes/index.js"
 app.use("/api", routes);
 
+
 app.use((req, res) => {
   console.log(`404 - Route not found: ${req.method} ${req.url}`);
   res.status(404).json({ 
