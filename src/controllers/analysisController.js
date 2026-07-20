@@ -27,7 +27,7 @@ export const analyzeCxr = async (req, res) => {
 
     console.log("Running computer vision analysis...");
     
-    // 1. Process image with Computer Vision
+    //  Process image with Computer Vision
     let visionResults = null;
     try {
       const imageBuffer = await fs.readFile(req.file.path);
