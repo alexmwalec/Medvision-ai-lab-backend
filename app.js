@@ -1,75 +1,45 @@
-import "dotenv/config";
-import express from "express";
-import cors from "cors";
-import path from "path";
-import { fileURLToPath } from "url";
-import { initDatabase } from "./src/config/database.js";
-import routes from "./src/routes/index.js";
-import { errorHandler } from "./src/middleware/auth.js";
-import { uptime } from "process";
+// app.js
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const dotenv = require('dotenv');
+const apiRoutes = require('./routes/api');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Load environment variables
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8000;
-const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
 
-app.use(cors({ 
-  origin: FRONTEND_ORIGIN,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true
-}));
 // Middleware
-app.disable("x-powered-by");
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(cors({
+    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    credentials: true
+}));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-app.use((req, res, next) => {
-  console.log(` ${req.method} ${req.url}`);
-  next();
-});
+app.use('/api', apiRoutes);
 
-// Health check
-app.get("/health", (req, res) => {
-  res.json({
-     status: "ok",
-     timestamp: new Date().toISOString(),
-     uptime: process.uptime()
-  });
-});
-
-app.use("/api", routes);
-
-
-app.use((req, res) => {
-  console.log(`404 - Route not found: ${req.method} ${req.url}`);
-  res.status(404).json({ 
-    error: "Route not found",
-    path: req.url,
-    method: req.method
-  });
-});
-
-// Error handler
-app.use(errorHandler);
-
-const start = async () => {
-  try {
-    await initDatabase();
-    console.log("Database connected");
-    
-    app.listen(PORT, () => {
-      console.log(` Server running on http://localhost:${PORT}`);
-      console.log(` CORS enabled for: ${FRONTEND_ORIGIN}`);
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'healthy', 
+        timestamp: new Date().toISOString() 
     });
-  } catch (error) {
-    console.error("Failed to start:", error.message);
-    process.exit(1);
-  }
-};
+});
 
-start();
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(err.status || 500).json({
+        success: false,
+        error: err.message || 'Internal Server Error'
+    });
+});
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`MedVision server running on port ${PORT}`);
+    console.log(`API available at http://localhost:${PORT}/api`);
+});
