@@ -1,44 +1,132 @@
-import { spawn } from "child_process";
-import path from "path";
-import { fileURLToPath } from "url";
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs').promises;
+const axios = require('axios');
+const cloudinary = require('cloudinary').v2;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Configure Cloudinary
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
-const PYTHON_SCRIPT = path.join(__dirname, "../../python_ai/main.py");
+class AIService {
+    static async analyzeImage(imageUrl) {
+        try {
+            console.log('Starting AI analysis...');
+            
+            const imageResponse = await axios.get(imageUrl, {
+                responseType: 'arraybuffer'
+            });
+            
+            const imageBase64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
 
-export const analyzeWithAI = (patientData) => {
-  return new Promise((resolve, reject) => {
-    const python = spawn("python3", [PYTHON_SCRIPT]);
-    let result = "";
-    let error = "";
+            const pythonScript = path.join(__dirname, '../python_ai/main.py');
+            const pythonProcess = spawn('python3', [pythonScript]);
 
-    python.stdin.write(JSON.stringify(patientData));
-    python.stdin.end();
+            const inputData = JSON.stringify({ image: imageBase64 });
+            pythonProcess.stdin.write(inputData);
+            pythonProcess.stdin.end();
 
-    python.stdout.on("data", (data) => {
-      result += data.toString();
-    });
+            // Collect output
+            let output = '';
+            let errorOutput = '';
 
-    python.stderr.on("data", (data) => {
-      error += data.toString();
-    });
+            pythonProcess.stdout.on('data', (data) => {
+                output += data.toString();
+            });
 
-    python.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(error || "Python process failed"));
-        return;
-      }
-      try {
-        resolve(JSON.parse(result));
-      } catch (e) {
-        reject(new Error("Invalid response from AI"));
-      }
-    });
+            pythonProcess.stderr.on('data', (data) => {
+                errorOutput += data.toString();
+                console.error('Python stderr:', data.toString());
+            });
 
-    setTimeout(() => {
-      python.kill();
-      reject(new Error("AI analysis timeout (5s)"));
-    }, 5000 );
-  });
-};
+            await new Promise((resolve, reject) => {
+                pythonProcess.on('close', (code) => {
+                    if (code === 0) {
+                        resolve();
+                    } else {
+                        reject(new Error(`Python process exited with code ${code}: ${errorOutput}`));
+                    }
+                });
+
+                pythonProcess.on('error', (error) => {
+                    reject(new Error(`Failed to start Python process: ${error.message}`));
+                });
+            });
+
+            try {
+                const result = JSON.parse(output);
+                console.log('✅ AI analysis complete');
+                return result;
+            } catch (parseError) {
+                console.error('Failed to parse Python output:', output);
+                throw new Error(`Invalid JSON from Python: ${output}`);
+            }
+
+        } catch (error) {
+            console.error('AI analysis failed:', error.message);
+            throw error;
+        }
+    }
+
+    static async mockAnalysis(imageUrl) {
+        console.log('🔍 Running mock analysis...');
+        
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Generate realistic mock findings
+        const findings = [
+            {
+                name: 'Normal Lung Fields',
+                probability: 87.5,
+                color: '#10B981',
+                description: 'No significant abnormalities detected in lung fields',
+                recommendations: ['Regular follow-up if symptoms persist']
+            },
+            {
+                name: 'Clear Costophrenic Angles',
+                probability: 92.3,
+                color: '#3B82F6',
+                description: 'Costophrenic angles are sharp and well-defined',
+                recommendations: []
+            },
+            {
+                name: 'Cardiac Silhouette Normal',
+                probability: 78.9,
+                color: '#8B5CF6',
+                description: 'Heart size and shape within normal limits',
+                recommendations: []
+            }
+        ];
+
+        // Randomly determine if there are abnormalities
+        const hasAbnormalities = Math.random() > 0.6;
+        
+        if (hasAbnormalities) {
+            findings.push({
+                name: 'Mild Opacity Detected',
+                probability: 67.8,
+                color: '#F59E0B',
+                description: 'Subtle opacity noted in the right lower lobe',
+                recommendations: [
+                    'Clinical correlation advised',
+                    'Consider follow-up imaging'
+                ]
+            });
+        }
+
+        return {
+            success: true,
+            abnormalities: findings,
+            hasAbnormalities,
+            findings: findings,
+            summary: hasAbnormalities 
+                ? 'Some abnormalities detected. Please review findings.'
+                : 'No significant abnormalities detected.'
+        };
+    }
+}
+
+module.exports = AIService;
