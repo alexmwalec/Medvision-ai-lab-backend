@@ -1,3 +1,6 @@
+router.post('/upload', upload.single('image'), AnalysisController.uploadImage);
+router.delete('/delete-image', AnalysisController.deleteImage);
+
 const express = require('express');
 const router = express.Router();
 const upload = require('../middleware/upload');
