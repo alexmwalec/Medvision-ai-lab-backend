@@ -1,32 +1,39 @@
-import multer from "multer";
-import path from "path";
-import { randomUUID } from "crypto";
-import fs from "fs/promises";
-
-const UPLOAD_DIR = process.env.UPLOAD_DIR || "./uploads";
-
-await fs.mkdir(UPLOAD_DIR, { recursive: true });
+const multer = require('multer');
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname || "").toLowerCase() || ".jpg";
-    cb(null, `${Date.now()}-${randomUUID()}${ext}`);
-  },
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        const filename = `${uuidv4()}${ext}`;
+        cb(null, filename);
+    }
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowed = [".jpg", ".jpeg", ".png", ".dcm", ".dicom"];
-  const ext = path.extname(file.originalname).toLowerCase();
-  if (allowed.includes(ext)) {
-    cb(null, true);
-  } else {
-    cb(new Error("Only JPG, PNG, and DICOM files are allowed"));
-  }
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/dicom'];
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.dcm'];
+
+    const ext = path.extname(file.originalname).toLowerCase();
+    const isValidType = allowedTypes.includes(file.mimetype);
+    const isValidExt = allowedExtensions.includes(ext);
+
+    if (isValidType || isValidExt) {
+        cb(null, true);
+    } else {
+        cb(new Error('Unsupported file type. Please upload JPG, PNG, or DICOM files.'), false);
+    }
 };
 
-export const upload = multer({
-  storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
-  fileFilter,
-}); 
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 100 * 1024 * 1024 
+    },
+    fileFilter: fileFilter
+});
+
+module.exports = upload;
