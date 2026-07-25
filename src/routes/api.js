@@ -1,16 +1,16 @@
-router.post('/upload', upload.single('image'), AnalysisController.uploadImage);
-router.delete('/delete-image', AnalysisController.deleteImage);
-
 const express = require('express');
 const router = express.Router();
+
 const upload = require('../middleware/upload');
 const AnalysisController = require('../controllers/analysisController');
 const PatientModel = require('../models/PatientModel');
 const FindingModel = require('../models/FindingModel');
 
+router.post('/upload', upload.single('image'), AnalysisController.uploadImage);
+
+router.delete('/delete-image', AnalysisController.deleteImage);
 
 router.post('/analyze', AnalysisController.analyze);
-
 
 router.get('/patients', async (req, res) => {
     try {
