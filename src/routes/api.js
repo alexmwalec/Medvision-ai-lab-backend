@@ -1,55 +1,23 @@
 const express = require('express');
 const router = express.Router();
-
 const upload = require('../middleware/upload');
 const AnalysisController = require('../controllers/analysisController');
 const PatientModel = require('../models/PatientModel');
 const FindingModel = require('../models/FindingModel');
+const { analyzeCxr, getPatients, getPatientById } = require('../controllers/analysisController');
+
+
+router.post('/analyze_cxr', upload.single('image'), analyzeCxr);
+
 
 router.post('/upload', upload.single('image'), AnalysisController.uploadImage);
-
 router.delete('/delete-image', AnalysisController.deleteImage);
 
-router.post('/analyze', AnalysisController.analyze);
 
-router.get('/patients', async (req, res) => {
-    try {
-        const patients = await PatientModel.findAll();
-        res.json({
-            success: true,
-            patients
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
+router.get('/patients', getPatients);
 
-// Get patient by ID
-router.get('/patients/:id', async (req, res) => {
-    try {
-        const patient = await PatientModel.findById(req.params.id);
-        if (!patient) {
-            return res.status(404).json({
-                success: false,
-                error: 'Patient not found'
-            });
-        }
-        res.json({
-            success: true,
-            patient
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
+router.get('/patients/:id', getPatientById);
 
-// Create patient
 router.post('/patients', async (req, res) => {
     try {
         const patient = await PatientModel.create(req.body);
@@ -186,7 +154,6 @@ router.delete('/patients/:id', async (req, res) => {
 });
 
 
-
 router.get('/patients/:id/findings', async (req, res) => {
     try {
         const findings = await FindingModel.findByPatientId(req.params.id);
@@ -217,7 +184,6 @@ router.post('/patients/:id/findings', async (req, res) => {
     }
 });
 
-// Delete finding
 router.delete('/findings/:id', async (req, res) => {
     try {
         await FindingModel.delete(req.params.id);
@@ -233,7 +199,38 @@ router.delete('/findings/:id', async (req, res) => {
     }
 });
 
-// ==================== STATISTICS ====================
+
+router.post('/feedback', async (req, res) => {
+    try {
+        const { patientId, type, status } = req.body;
+        
+        if (!patientId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Patient ID is required'
+            });
+        }
+
+        if (status) {
+            await PatientModel.updateStatus(patientId, status);
+        }
+
+        
+        const patient = await PatientModel.findById(patientId);
+        
+        res.json({
+            success: true,
+            message: 'Feedback submitted successfully',
+            patient
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 
 router.get('/patients/stats', async (req, res) => {
     try {
@@ -241,6 +238,36 @@ router.get('/patients/stats', async (req, res) => {
         res.json({
             success: true,
             stats
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+
+// This serves the heatmap image
+router.get('/heatmap/:patientId', async (req, res) => {
+    try {
+        const { patientId } = req.params;
+        const patient = await PatientModel.findById(patientId);
+        
+        if (!patient) {
+            return res.status(404).json({
+                success: false,
+                error: 'Patient not found'
+            });
+        }
+
+        if (patient.image_url) {
+            return res.redirect(patient.image_url);
+        }
+
+        res.status(404).json({
+            success: false,
+            error: 'Heatmap not available'
         });
     } catch (error) {
         res.status(500).json({

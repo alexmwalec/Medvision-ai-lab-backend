@@ -1,43 +1,46 @@
 const express = require('express');
-const router = express.Router();
 const cors = require('cors');
 const path = require('path');
 const dotenv = require('dotenv');
-const apiRoutes = require('./src/routes/api');
+const fs = require('fs');
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8000;
 
+if (!fs.existsSync('uploads')) {
+    fs.mkdirSync('uploads');
+}
+
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    origin: '*',
     credentials: true
 }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+const apiRoutes = require('./src/routes/api');
 app.use('/api', apiRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ 
-        status: 'healthy', 
-        timestamp: new Date().toISOString() 
+        status: 'OK', 
+        message: 'MedVision AI Backend is running',
+        timestamp: new Date().toISOString()
     });
 });
 
 app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(err.status || 500).json({
-        success: false,
-        error: err.message || 'Internal Server Error'
+    console.error('Error:', err.stack);
+    res.status(500).json({
+        error: err.message || 'Something went wrong!'
     });
 });
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`MedVision server running on port ${PORT}`);
-    console.log(`API available at http://localhost:${PORT}/api`);
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`API endpoint: http://localhost:${PORT}/api`);
 });

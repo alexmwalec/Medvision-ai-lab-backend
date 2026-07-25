@@ -41,12 +41,26 @@ class PatientModel {
         return await this.findById(id);
     }
 
-    // Get all patients with their findings
     static async findAll() {
         try {
             const rows = await query(`
                 SELECT 
-                    p.*,
+                    p.id,
+                    p.name,
+                    p.patient_id as patientId,
+                    p.age,
+                    p.gender,
+                    p.scan_date as date,
+                    p.scan_type as scanType,
+                    p.clinical_symptoms as clinicalSymptoms,
+                    p.clinical_history as clinicalHistory,
+                    p.image_url as imageUrl,
+                    p.public_id as publicId,
+                    p.priority,
+                    p.status,
+                    p.review_requested_at as reviewRequestedAt,
+                    p.created_at as createdAt,
+                    p.updated_at as updatedAt,
                     f.id AS finding_id,
                     f.name AS finding_name,
                     f.probability AS finding_probability,
@@ -66,11 +80,25 @@ class PatientModel {
         }
     }
 
-    // Find patient by ID with findings
     static async findById(id) {
         const rows = await query(`
             SELECT 
-                p.*,
+                p.id,
+                p.name,
+                p.patient_id as patientId,
+                p.age,
+                p.gender,
+                p.scan_date as date,
+                p.scan_type as scanType,
+                p.clinical_symptoms as clinicalSymptoms,
+                p.clinical_history as clinicalHistory,
+                p.image_url as imageUrl,
+                p.public_id as publicId,
+                p.priority,
+                p.status,
+                p.review_requested_at as reviewRequestedAt,
+                p.created_at as createdAt,
+                p.updated_at as updatedAt,
                 f.id AS finding_id,
                 f.name AS finding_name,
                 f.probability AS finding_probability,
@@ -88,7 +116,6 @@ class PatientModel {
         return this.groupPatientsWithFindings(rows)[0] || null;
     }
 
-    // Update patient
     static async update(id, updateData) {
         const { name, age, gender, priority, status, clinicalSymptoms, clinicalHistory } = updateData;
         
@@ -116,7 +143,6 @@ class PatientModel {
         return await this.findById(id);
     }
 
-    // Update patient priority
     static async updatePriority(id, priority) {
         await query(
             'UPDATE patients SET priority = ? WHERE id = ?',
@@ -176,19 +202,20 @@ class PatientModel {
                 patientMap[row.id] = {
                     id: row.id,
                     name: row.name,
+                    patientId: row.patientId,
                     age: row.age,
                     gender: row.gender,
-                    scan_date: row.scan_date,
-                    scan_type: row.scan_type,
-                    clinical_symptoms: row.clinical_symptoms,
-                    clinical_history: row.clinical_history,
-                    image_url: row.image_url,
-                    public_id: row.public_id,
-                    priority: row.priority,
-                    status: row.status,
-                    review_requested_at: row.review_requested_at,
-                    created_at: row.created_at,
-                    updated_at: row.updated_at,
+                    date: row.date,
+                    scanType: row.scanType,
+                    clinicalSymptoms: row.clinicalSymptoms,
+                    clinicalHistory: row.clinicalHistory,
+                    imageUrl: row.imageUrl,
+                    publicId: row.publicId,
+                    priority: row.priority || 'medium',
+                    status: row.status || 'pending',
+                    reviewRequestedAt: row.reviewRequestedAt,
+                    createdAt: row.createdAt,
+                    updatedAt: row.updatedAt,
                     aiFindings: []
                 };
             }
@@ -197,9 +224,9 @@ class PatientModel {
                 patientMap[row.id].aiFindings.push({
                     id: row.finding_id,
                     name: row.finding_name,
-                    probability: parseFloat(row.finding_probability),
-                    color: row.finding_color,
-                    description: row.finding_description,
+                    probability: parseFloat(row.finding_probability) || 0,
+                    color: row.finding_color || '#3B82F6',
+                    description: row.finding_description || '',
                     recommendations: JSON.parse(row.finding_recommendations || '[]'),
                     boundingBox: JSON.parse(row.finding_bounding_box || '{}')
                 });

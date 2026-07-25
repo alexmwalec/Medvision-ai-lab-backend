@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import cv2
 import numpy as np
 from PIL import Image
@@ -13,7 +12,6 @@ class VisionProcessor:
         
     def process_image(self, image_bytes):
         """Process uploaded image and extract features"""
-        # Convert bytes to image
         nparr = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
