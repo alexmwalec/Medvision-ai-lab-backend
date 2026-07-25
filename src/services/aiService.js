@@ -1,132 +1,96 @@
-const { spawn } = require('child_process');
-const path = require('path');
-const fs = require('fs').promises;
-const axios = require('axios');
-const cloudinary = require('cloudinary').v2;
+const DISEASES = [
+  { name: 'Atelectasis', description: 'Partial or complete collapse of lung tissue.' },
+  { name: 'Cardiomegaly', description: 'Enlargement of the heart silhouette.' },
+  { name: 'Effusion', description: 'Fluid accumulation in the pleural space.' },
+  { name: 'Infiltration', description: 'Substance denser than air present in the lung.' },
+  { name: 'Mass', description: 'A larger, discrete lung lesion.' },
+  { name: 'Nodule', description: 'A small round lesion in the lung.' },
+  { name: 'Pneumonia', description: 'Infection causing inflammation in the air sacs.' },
+  { name: 'Pneumothorax', description: 'Air in the pleural space causing lung collapse.' },
+  { name: 'Consolidation', description: 'Region of lung filled with liquid instead of air.' },
+  { name: 'Edema', description: 'Excess fluid buildup in the lung tissue.' },
+  { name: 'Emphysema', description: 'Damage to air sacs reducing lung elasticity.' },
+  { name: 'Fibrosis', description: 'Scarring of lung tissue.' },
+  { name: 'Pleural_Thickening', description: 'Thickening of the pleural lining.' },
+  { name: 'Hernia', description: 'Diaphragmatic herniation of abdominal contents.' }
+];
 
-// Configure Cloudinary
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-});
+const CRITICAL_NAMES = ['Pneumonia', 'Mass', 'Pneumothorax', 'Cardiomegaly'];
 
-class AIService {
-    static async analyzeImage(imageUrl) {
-        try {
-            console.log('Starting AI analysis...');
-            
-            const imageResponse = await axios.get(imageUrl, {
-                responseType: 'arraybuffer'
-            });
-            
-            const imageBase64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
+const RECS = {
+  low: ['Routine follow-up as clinically indicated', 'No immediate action required'],
+  medium: ['Clinical correlation advised', 'Consider follow-up imaging in 4-6 weeks'],
+  high: ['Urgent radiologist review recommended', 'Correlate with clinical symptoms immediately']
+};
 
-            const pythonScript = path.join(__dirname, '../python_ai/main.py');
-            const pythonProcess = spawn('python3', [pythonScript]);
-
-            const inputData = JSON.stringify({ image: imageBase64 });
-            pythonProcess.stdin.write(inputData);
-            pythonProcess.stdin.end();
-
-            // Collect output
-            let output = '';
-            let errorOutput = '';
-
-            pythonProcess.stdout.on('data', (data) => {
-                output += data.toString();
-            });
-
-            pythonProcess.stderr.on('data', (data) => {
-                errorOutput += data.toString();
-                console.error('Python stderr:', data.toString());
-            });
-
-            await new Promise((resolve, reject) => {
-                pythonProcess.on('close', (code) => {
-                    if (code === 0) {
-                        resolve();
-                    } else {
-                        reject(new Error(`Python process exited with code ${code}: ${errorOutput}`));
-                    }
-                });
-
-                pythonProcess.on('error', (error) => {
-                    reject(new Error(`Failed to start Python process: ${error.message}`));
-                });
-            });
-
-            try {
-                const result = JSON.parse(output);
-                console.log('✅ AI analysis complete');
-                return result;
-            } catch (parseError) {
-                console.error('Failed to parse Python output:', output);
-                throw new Error(`Invalid JSON from Python: ${output}`);
-            }
-
-        } catch (error) {
-            console.error('AI analysis failed:', error.message);
-            throw error;
-        }
-    }
-
-    static async mockAnalysis(imageUrl) {
-        console.log('🔍 Running mock analysis...');
-        
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // Generate realistic mock findings
-        const findings = [
-            {
-                name: 'Normal Lung Fields',
-                probability: 87.5,
-                color: '#10B981',
-                description: 'No significant abnormalities detected in lung fields',
-                recommendations: ['Regular follow-up if symptoms persist']
-            },
-            {
-                name: 'Clear Costophrenic Angles',
-                probability: 92.3,
-                color: '#3B82F6',
-                description: 'Costophrenic angles are sharp and well-defined',
-                recommendations: []
-            },
-            {
-                name: 'Cardiac Silhouette Normal',
-                probability: 78.9,
-                color: '#8B5CF6',
-                description: 'Heart size and shape within normal limits',
-                recommendations: []
-            }
-        ];
-
-        // Randomly determine if there are abnormalities
-        const hasAbnormalities = Math.random() > 0.6;
-        
-        if (hasAbnormalities) {
-            findings.push({
-                name: 'Mild Opacity Detected',
-                probability: 67.8,
-                color: '#F59E0B',
-                description: 'Subtle opacity noted in the right lower lobe',
-                recommendations: [
-                    'Clinical correlation advised',
-                    'Consider follow-up imaging'
-                ]
-            });
-        }
-
-        return {
-            success: true,
-            abnormalities: findings,
-            hasAbnormalities,
-            findings: findings,
-            summary: hasAbnormalities 
-                ? 'Some abnormalities detected. Please review findings.'
-                : 'No significant abnormalities detected.'
-        };
-    }
+function recommendationsFor(prob) {
+  if (prob >= 70) return RECS.high;
+  if (prob >= 40) return RECS.medium;
+  return RECS.low;
 }
 
-module.exports = AIService;
+function colorFor(prob) {
+  if (prob >= 70) return '#EF4444';
+  if (prob >= 40) return '#F59E0B';
+  return '#10B981';
+}
+
+async function mockAnalysis() {
+  // simulate model inference latency
+  await new Promise((resolve) => setTimeout(resolve, 1200 + Math.random() * 800));
+
+  const scored = DISEASES.map((d) => ({
+    ...d,
+    probability: Math.round(Math.random() * 100 * 100) / 100
+  }));
+
+  const NOISE_FLOOR = 15;
+  let findings = scored
+    .filter((d) => d.probability >= NOISE_FLOOR)
+    .sort((a, b) => b.probability - a.probability)
+    .slice(0, 6)
+    .map((d) => ({
+      name: d.name,
+      probability: d.probability,
+      color: colorFor(d.probability),
+      description: d.description,
+      recommendations: recommendationsFor(d.probability),
+      boundingBox: {
+        x: Math.round(Math.random() * 40 + 10),
+        y: Math.round(Math.random() * 40 + 10),
+        width: Math.round(Math.random() * 30 + 15),
+        height: Math.round(Math.random() * 30 + 15)
+      }
+    }));
+
+  if (findings.length === 0) {
+    findings = [
+      {
+        name: 'No Significant Findings',
+        probability: Math.round((100 - Math.random() * 15) * 100) / 100,
+        color: '#10B981',
+        description: 'No abnormalities detected above the confidence threshold across all 14 monitored conditions.',
+        recommendations: ['Routine follow-up as clinically indicated'],
+        boundingBox: {}
+      }
+    ];
+  }
+
+  const hasCritical = findings.some((f) => f.probability >= 70 && CRITICAL_NAMES.includes(f.name));
+  const hasHigh = findings.some((f) => f.probability >= 70);
+  const hasMedium = findings.some((f) => f.probability >= 40);
+
+  let priority = 'low';
+  if (hasCritical) priority = 'critical';
+  else if (hasHigh) priority = 'high';
+  else if (hasMedium) priority = 'medium';
+
+  const summary =
+    findings[0].name === 'No Significant Findings'
+      ? 'No significant abnormalities detected across all 14 monitored conditions.'
+      : `AI detected ${findings.length} finding(s) of note, led by ${findings[0].name} (${findings[0].probability}%).`;
+
+  return { findings, priority, summary };
+}
+
+module.exports = { mockAnalysis, DISEASES };
