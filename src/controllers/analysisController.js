@@ -2,7 +2,7 @@ const fs = require('fs');
 const PatientModel = require('../models/PatientModel');
 const FindingModel = require('../models/FindingModel');
 const AIService = require('../services/aiService');
-const HeatmapService = require('../services/heatmapService');
+const HeatmapService = require('../services/heatmap');
 const { validateAnalyzeRequest } = require('../utils/validators');
 
 async function analyzeCxr(req, res) {
@@ -16,9 +16,7 @@ async function analyzeCxr(req, res) {
     const aiResult = await AIService.mockAnalysis();
 
     const imageFilename = req.file.filename;
-    // Composite a Grad-CAM-style overlay onto the scan at each finding's
-    // location, intensity scaled to probability. Falls back to a plain copy
-    // of the scan if image processing fails for any reason.
+  .
     const heatmapFilename = await HeatmapService.generateHeatmap(req.file.path, aiResult.findings);
 
     const patient = await PatientModel.create({
