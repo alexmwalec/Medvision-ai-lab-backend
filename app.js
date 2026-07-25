@@ -1,17 +1,14 @@
-// app.js
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const dotenv = require('dotenv');
-const apiRoutes = require('./routes/api');
+const apiRoutes = require('./src/routes/api');
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-// Middleware
 app.use(cors({
     origin: ['http://localhost:3000', 'http://localhost:3001'],
     credentials: true
