@@ -9,8 +9,7 @@ const app = express();
 app.use(cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000' }));
 app.use(express.json());
 
-app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
-
+app.use('/api/uploads', express.static(path.join(__dirname, 'src', 'uploads')));
 app.use('/api', apiRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));

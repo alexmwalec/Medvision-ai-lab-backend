@@ -16,7 +16,7 @@ async function analyzeCxr(req, res) {
     const aiResult = await AIService.mockAnalysis();
 
     const imageFilename = req.file.filename;
-  .
+
     const heatmapFilename = await HeatmapService.generateHeatmap(req.file.path, aiResult.findings);
 
     const patient = await PatientModel.create({
