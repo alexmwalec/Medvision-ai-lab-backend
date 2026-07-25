@@ -1,79 +1,47 @@
-const { query } = require('../config/database');
-const { v4: uuidv4 } = require('uuid');
+const { pool } = require('../config/database');
+const { randomUUID } = require('crypto');
 
 class FindingModel {
-    static async create(patientId, findingData) {
-        const {
-            name,
-            probability,
-            color = '#3B82F6',
-            description = '',
-            recommendations = [],
-            boundingBox = {}
-        } = findingData;
+  static async create(patientId, finding) {
+    const id = randomUUID();
+    await pool.query(
+      `INSERT INTO findings
+        (id, patient_id, name, probability, color, description, recommendations, bounding_box)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        patientId,
+        finding.name,
+        finding.probability,
+        finding.color || '#3B82F6',
+        finding.description || '',
+        JSON.stringify(finding.recommendations || []),
+        JSON.stringify(finding.boundingBox || {})
+      ]
+    );
+    return { id, patientId, ...finding };
+  }
 
-        const id = uuidv4();
+  static async findByPatientId(patientId) {
+    const [rows] = await pool.query(
+      'SELECT * FROM findings WHERE patient_id = ? ORDER BY probability DESC',
+      [patientId]
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      probability: parseFloat(r.probability),
+      color: r.color,
+      description: r.description,
+      recommendations: JSON.parse(r.recommendations || '[]'),
+      boundingBox: JSON.parse(r.bounding_box || '{}')
+    }));
+  }
 
-        await query(
-            `INSERT INTO findings 
-             (id, patient_id, name, probability, color, description, recommendations, bounding_box)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                id,
-                patientId,
-                name,
-                probability,
-                color,
-                description,
-                JSON.stringify(recommendations),
-                JSON.stringify(boundingBox)
-            ]
-        );
-
-        return this.findById(id);
-    }
-
-    // Find finding by ID
-    static async findById(id) {
-        const rows = await query(
-            'SELECT * FROM findings WHERE id = ?',
-            [id]
-        );
-
-        if (rows.length === 0) return null;
-
-        const finding = rows[0];
-        return {
-            ...finding,
-            recommendations: JSON.parse(finding.recommendations || '[]'),
-            boundingBox: JSON.parse(finding.bounding_box || '{}')
-        };
-    }
-
-    // Get all findings for a patient
-    static async findByPatientId(patientId) {
-        const rows = await query(
-            'SELECT * FROM findings WHERE patient_id = ? ORDER BY created_at DESC',
-            [patientId]
-        );
-
-        return rows.map(row => ({
-            ...row,
-            recommendations: JSON.parse(row.recommendations || '[]'),
-            boundingBox: JSON.parse(row.bounding_box || '{}')
-        }));
-    }
-
-    // Delete a finding
-    static async delete(id) {
-        await query('DELETE FROM findings WHERE id = ?', [id]);
-        return { success: true };
-    }
-
-    static async deleteByPatientId(patientId) {
-        await query('DELETE FROM findings WHERE patient_id = ?', [patientId]);
-        return { success: true };
-    }
+  static async deleteByPatientId(patientId) {
+    await pool.query('DELETE FROM findings WHERE patient_id = ?', [patientId]);
+    return { success: true };
+  }
 }
 
 module.exports = FindingModel;
