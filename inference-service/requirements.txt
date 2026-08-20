@@ -1,0 +1,8 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+torch==2.6.0
+torchvision==0.21.0
+opencv-python-headless==4.10.0.84
+pillow==11.0.0
+numpy==2.1.2
+python-multipart==0.0.12
