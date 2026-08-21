@@ -8,6 +8,7 @@ class GradCAM:
     def __init__(self, model, target_layer=None):
         self.model = model
         self.model.eval()
+        # Default target layer: the final feature block of DenseNet-121
         # (output shape ~ [B, 1024, 7, 7] for 224x224 input)
         self.target_layer = target_layer if target_layer is not None else model.features
 
@@ -34,6 +35,7 @@ class GradCAM:
         score = output[0, class_idx]
         score.backward(retain_graph=True)
 
+        # Global-average-pool the gradients over spatial dims -> per-channel weight
         weights = self.gradients.mean(dim=(2, 3), keepdim=True)  # [1, C, 1, 1]
         cam = (weights * self.activations).sum(dim=1, keepdim=True)  # [1, 1, H, W]
         cam = F.relu(cam)
@@ -54,3 +56,27 @@ def overlay_heatmap(cam, original_image_bgr, alpha=0.4):
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
     overlaid = cv2.addWeighted(heatmap, alpha, original_image_bgr, 1 - alpha, 0)
     return overlaid
+
+
+def extract_bounding_box(cam, threshold=0.6):
+    """
+    Derive a normalized bounding box [x, y, width, height] (values 0-1,
+    relative to image size) around the strongest region of the CAM.
+    Returns None if nothing exceeds the threshold.
+    """
+    h, w = cam.shape
+    mask = np.uint8(cam >= threshold) * 255
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+
+    # Take the largest contour by area — the most prominent activated region
+    largest = max(contours, key=cv2.contourArea)
+    x, y, bw, bh = cv2.boundingRect(largest)
+
+    return {
+        "x": round(x / w, 4),
+        "y": round(y / h, 4),
+        "width": round(bw / w, 4),
+        "height": round(bh / h, 4),
+    }
