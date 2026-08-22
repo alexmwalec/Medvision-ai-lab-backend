@@ -1,7 +1,7 @@
 
 
 const crypto = require("crypto");
-const pool = require("../db/pool");
+const { pool } = require("../config/database");
 
 /**
  * Insert one finding row.

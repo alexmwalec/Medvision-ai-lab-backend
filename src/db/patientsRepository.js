@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const pool = require("../db/pool");
+const { pool } = require("../config/database");
 
 /**
  * Create a new patient/scan record.

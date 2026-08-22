@@ -4,11 +4,9 @@ const path = require("path");
 const inferenceClient = require("../services/inferenceClient");
 const patientsRepository = require("../db/patientsRepository");
 const findingsRepository = require("../db/findingsRepository");
-const { scoreToColor } = require("../utils/severity");
+const { scoreToColor } = require("../util/severity");
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, "..", "..", "uploads");
-// Only create findings rows for diseases scoring at or above this —
-// avoids cluttering the table with 14 near-zero rows per scan.
 const FINDING_DISPLAY_THRESHOLD = parseFloat(process.env.FINDING_DISPLAY_THRESHOLD) || 0.15;
 
 async function ensureUploadDirs(patientId) {
@@ -35,8 +33,6 @@ async function handlePredict(req, res) {
     const threshold = parseFloat(req.query.threshold) || 0.5;
     const explainTopN = parseInt(req.query.explain_top_n, 10) || 1;
 
-    // --- Step 1: create the patient/scan record first, so we have an id ---
-    // to use for file paths.
     const patientId = await patientsRepository.createPatientScan({
       externalPatientId: req.body.externalPatientId || null,
       name: req.body.patientName || "Unknown",
@@ -50,12 +46,10 @@ async function handlePredict(req, res) {
 
     const patientDir = await ensureUploadDirs(patientId);
 
-    // --- Step 2: save the original uploaded image to disk ---
     const originalFilename = `original${path.extname(req.file.originalname) || ".png"}`;
     const imagePath = path.join(patientDir, originalFilename);
     await fs.writeFile(imagePath, req.file.buffer);
 
-    // --- Step 3: call the inference service ---
     let result;
     try {
       result = await inferenceClient.predict(
@@ -115,6 +109,8 @@ async function handlePredict(req, res) {
       patientId,
       imagePath,
       heatmapPath,
+      imageUrl: `/api/uploads/patients/${patientId}/${originalFilename}`,
+      heatmapUrl: heatmapPath ? `/api/uploads/patients/${patientId}/heatmap.png` : null,
       findings,
       explanations,
     });

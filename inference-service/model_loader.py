@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -13,7 +14,12 @@ LABELS = [
 ]
 NUM_CLASSES = len(LABELS)
 
-DEFAULT_CHECKPOINT_PATH = os.environ.get("MODEL_PATH", "models/finetune_best.pt")
+SERVICE_DIR = Path(__file__).resolve().parent
+# Keep the bundled checkpoint path independent of the directory Uvicorn is run
+# from. MODEL_PATH may still be used to provide a different checkpoint.
+DEFAULT_CHECKPOINT_PATH = os.environ.get(
+    "MODEL_PATH", str(SERVICE_DIR / "model" / "finetune_best .pt")
+)
 
 
 class ModelBundle:
@@ -37,7 +43,12 @@ class ModelBundle:
         in_features = model.classifier.in_features
         model.classifier = nn.Linear(in_features, NUM_CLASSES)
 
-        ckpt = torch.load(checkpoint_path, map_location=self.device)
+        # This project checkpoint includes NumPy training metadata. PyTorch 2.6
+        # defaults to ``weights_only=True``, which cannot deserialize it.
+        # Only load checkpoints from trusted sources.
+        ckpt = torch.load(
+            checkpoint_path, map_location=self.device, weights_only=False
+        )
         state_dict = ckpt["model_state"] if isinstance(ckpt, dict) and "model_state" in ckpt else ckpt
         model.load_state_dict(state_dict)
 

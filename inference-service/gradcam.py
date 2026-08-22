@@ -16,13 +16,22 @@ class GradCAM:
         self.gradients = None
 
         self.target_layer.register_forward_hook(self._save_activation)
-        self.target_layer.register_full_backward_hook(self._save_gradient)
 
     def _save_activation(self, module, input, output):
         self.activations = output.detach()
+        # Capture gradients from the feature tensor itself. A module backward
+        # hook wraps its output, which clashes with DenseNet's in-place ReLU
+        # on recent PyTorch versions ("BackwardHookFunctionBackward is a
+        # view and is being modified inplace"). Tensor hooks do not alter the
+        # forward output, so the model can retain its native implementation.
+        # The same hooked layer is visited during the regular no-gradient
+        # prediction pass. Tensor hooks require autograd, which is only
+        # enabled for the Grad-CAM forward/backward pass.
+        if output.requires_grad:
+            output.register_hook(self._save_gradient)
 
-    def _save_gradient(self, module, grad_input, grad_output):
-        self.gradients = grad_output[0].detach()
+    def _save_gradient(self, gradient):
+        self.gradients = gradient.detach()
 
     def generate(self, input_tensor, class_idx):
         """
