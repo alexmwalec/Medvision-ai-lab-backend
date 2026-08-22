@@ -47,12 +47,12 @@ async function createPatientScan({
  * Update a patient/scan record once inference completes — sets the
  * heatmap path and marks status as completed.
  */
-async function updateAfterInference(patientId, { heatmapPath, priority }) {
+async function updateAfterInference(patientId, { imagePath, heatmapPath, priority }) {
   await pool.query(
     `UPDATE patients
-     SET heatmap_path = ?, status = 'completed', priority = ?
+     SET image_path = COALESCE(?, image_path), heatmap_path = ?, status = 'completed', priority = ?
      WHERE id = ?`,
-    [heatmapPath, priority, patientId]
+    [imagePath, heatmapPath, priority, patientId]
   );
 }
 

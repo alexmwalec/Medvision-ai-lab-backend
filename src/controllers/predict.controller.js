@@ -4,10 +4,13 @@ const path = require("path");
 const inferenceClient = require("../services/inferenceClient");
 const patientsRepository = require("../db/patientsRepository");
 const findingsRepository = require("../db/findingsRepository");
+const PatientModel = require("../models/PatientModel");
 const { scoreToColor } = require("../util/severity");
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, "..", "..", "uploads");
-const FINDING_DISPLAY_THRESHOLD = parseFloat(process.env.FINDING_DISPLAY_THRESHOLD) || 0.15;
+// Model scores exist for every class, but only scores at or above this value
+// represent a displayed detection. Keep it configurable for clinical tuning.
+const DETECTION_THRESHOLD = parseFloat(process.env.DETECTION_THRESHOLD) || 0.5;
 
 async function ensureUploadDirs(patientId) {
   const dir = path.join(UPLOAD_DIR, "patients", patientId);
@@ -30,7 +33,7 @@ async function handlePredict(req, res) {
       });
     }
 
-    const threshold = parseFloat(req.query.threshold) || 0.5;
+    const threshold = parseFloat(req.query.threshold) || DETECTION_THRESHOLD;
     const explainTopN = parseInt(req.query.explain_top_n, 10) || 1;
 
     const patientId = await patientsRepository.createPatientScan({
@@ -49,6 +52,7 @@ async function handlePredict(req, res) {
     const originalFilename = `original${path.extname(req.file.originalname) || ".png"}`;
     const imagePath = path.join(patientDir, originalFilename);
     await fs.writeFile(imagePath, req.file.buffer);
+    const imageStoragePath = path.posix.join("patients", patientId, originalFilename);
 
     let result;
     try {
@@ -79,17 +83,18 @@ async function handlePredict(req, res) {
       const heatmapFilename = "heatmap.png";
       const heatmapFullPath = path.join(patientDir, heatmapFilename);
       await fs.writeFile(heatmapFullPath, Buffer.from(topExplanation.heatmap_png_base64, "base64"));
-      heatmapPath = heatmapFullPath;
+      heatmapPath = path.posix.join("patients", patientId, heatmapFilename);
     }
 
     await patientsRepository.updateAfterInference(patientId, {
+      imagePath: imageStoragePath,
       heatmapPath,
       priority: priorityFromTopScore(topFinding.score),
     });
 
     // --- Step 5: insert one findings row per disease above display threshold ---
     const findingsToInsert = findings
-      .filter((f) => f.score >= FINDING_DISPLAY_THRESHOLD)
+      .filter((f) => f.score >= threshold)
       .map((f) => {
         const explanation = explanations.find((e) => e.disease === f.disease);
         return {
@@ -103,15 +108,18 @@ async function handlePredict(req, res) {
       });
 
     await findingsRepository.insertFindings(patientId, findingsToInsert);
+    const patient = await PatientModel.findById(patientId);
 
     return res.json({
       success: true,
       patientId,
-      imagePath,
-      heatmapPath,
-      imageUrl: `/api/uploads/patients/${patientId}/${originalFilename}`,
-      heatmapUrl: heatmapPath ? `/api/uploads/patients/${patientId}/heatmap.png` : null,
-      findings,
+      patient,
+      imageUrl: patient.imageUrl,
+      heatmapUrl: patient.heatmapUrl,
+      // Do not return every model class. The frontend must present only
+      // clinically detected findings, which are persisted with the patient.
+      findings: patient.aiFindings,
+      aiFindings: patient.aiFindings,
       explanations,
     });
   } catch (err) {

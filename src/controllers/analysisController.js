@@ -1,65 +1,5 @@
-const fs = require('fs');
 const PatientModel = require('../models/PatientModel');
 const FindingModel = require('../models/FindingModel');
-const AIService = require('../services/aiService');
-const HeatmapService = require('../services/heatmap');
-const { validateAnalyzeRequest } = require('../utils/validators');
-
-async function analyzeCxr(req, res) {
-  const errors = validateAnalyzeRequest(req.body, req.file);
-  if (errors.length > 0) {
-    if (req.file?.path) await fs.promises.rm(req.file.path, { force: true }).catch(() => {});
-    return res.status(400).json({ success: false, error: 'Invalid request', details: errors });
-  }
-
-  try {
-    const aiResult = await AIService.mockAnalysis();
-
-    const imageFilename = req.file.filename;
-
-    const heatmapFilename = await HeatmapService.generateHeatmap(req.file.path, aiResult.findings);
-
-    const patient = await PatientModel.create({
-      patientId: req.body.patientId,
-      name: req.body.name.trim(),
-      age: req.body.age,
-      gender: req.body.gender,
-      scanType: req.body.scanType || 'Chest X-ray',
-      date: req.body.date,
-      clinicalSymptoms: req.body.clinicalSymptoms,
-      clinicalHistory: req.body.clinicalHistory,
-      imageFilename,
-      heatmapFilename,
-      status: 'pending',
-      priority: aiResult.priority
-    });
-
-    const savedFindings = [];
-    for (const finding of aiResult.findings) {
-      const saved = await FindingModel.create(patient.id, finding);
-      savedFindings.push({ ...finding, id: saved.id });
-    }
-
-    const updatedPatient = await PatientModel.findById(patient.id);
-
-    return res.status(201).json({
-      success: true,
-      patient: updatedPatient,
-      aiFindings: savedFindings,
-      heatmapUrl: updatedPatient.heatmapUrl,
-      priority: aiResult.priority,
-      model: 'CheXNet-14 (simulated)',
-      totalDiseases: 14,
-      detectedDiseases: savedFindings.length,
-      summary: aiResult.summary,
-      message: 'CXR analysis completed using simulated CheXNet-14.'
-    });
-  } catch (error) {
-    if (req.file?.path) await fs.promises.rm(req.file.path, { force: true }).catch(() => {});
-    console.error('Analyze error:', error);
-    return res.status(500).json({ success: false, error: error.message });
-  }
-}
 
 async function getPatients(req, res) {
   try {
@@ -151,7 +91,6 @@ async function getStats(req, res) {
 }
 
 module.exports = {
-  analyzeCxr,
   getPatients,
   getPatientById,
   updateStatus,

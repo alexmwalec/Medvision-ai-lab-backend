@@ -14,8 +14,10 @@ function toCamelPatient(row) {
     date: row.scan_date,
     clinicalSymptoms: row.clinical_symptoms,
     clinicalHistory: row.clinical_history,
-    imageUrl: row.image_path ? `/uploads/${row.image_path}` : null,
-    heatmapUrl: row.heatmap_path ? `/uploads/${row.heatmap_path}` : null,
+    // image_path and heatmap_path are relative to the backend uploads folder.
+    // Serve them through Express rather than leaking filesystem paths.
+    imageUrl: row.image_path ? `/api/uploads/${row.image_path}` : null,
+    heatmapUrl: row.heatmap_path ? `/api/uploads/${row.heatmap_path}` : null,
     status: row.status,
     priority: row.priority,
     createdAt: row.created_at,
