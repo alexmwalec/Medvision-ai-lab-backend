@@ -1,5 +1,5 @@
 services:
-  # MySQL Database for persistence and transactional state
+  #MySQL Database for persistence and transactional state
   mysql:
     image: mysql:8.0
     container_name: medvision-mysql
@@ -17,7 +17,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis for the Celery work queue and result backend
+  #Redis for the Celery work queue and result backend
   redis:
     image: redis:7-alpine
     container_name: medvision-redis
@@ -30,7 +30,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # The AI Inference API (FastAPI)
+  #The AI Inference API (FastAPI)
   inference-api:
     build: 
       context: ./inference-service
@@ -51,7 +51,7 @@ services:
         condition: service_healthy
     command: uvicorn app:app --host 0.0.0.0 --port 8000
 
-  # The Celery Worker (Runs the actual AI models)
+  #The Celery Worker (Runs the actual AI models)
   inference-worker:
     build:
       context: ./inference-service
