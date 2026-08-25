@@ -5,4 +5,17 @@ torchvision==0.21.0
 opencv-python-headless==4.10.0.84
 pillow==11.0.0
 numpy==2.1.2
+pydicom==3.0.1
+# Pixel-data decoders needed for common compressed hospital DICOM transfer syntaxes.
+pylibjpeg==2.0.1
+pylibjpeg-libjpeg==2.3.0
+pylibjpeg-openjpeg==2.4.0
 python-multipart==0.0.12
+
+
+sqlalchemy==2.0.35
+pymysql==1.1.1
+celery==5.4.0
+redis==5.0.8
+python-dotenv==1.0.1
+

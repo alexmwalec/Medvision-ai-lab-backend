@@ -45,6 +45,16 @@ The backend runs on `http://localhost:8000` by default. The React frontend reads
 
 The Docker Compose database maps host port `5433` to container port `5432` to avoid clashing with local PostgreSQL installs.
 
+## Image formats
+
+`POST /api/predict` accepts DICOM Part 10 (`.dcm`/`.dicom`) and JPEG/PNG.
+The inference service decodes DICOM with `pydicom`, preserves study/series/SOP
+UIDs in its response, and correctly applies modality rescale, VOI windowing,
+MONOCHROME1 inversion, and common compressed transfer syntaxes. It does not
+attempt to treat a DICOM file as a raster image. This model is currently for
+chest X-ray inference only; accepting a DICOM object does not make every
+modality clinically supported.
+
 ## Security And Performance
 
 - Restricted CORS via `FRONTEND_ORIGIN`

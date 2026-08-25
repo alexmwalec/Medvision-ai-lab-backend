@@ -1,21 +1,74 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: medvision-postgres
+  # MySQL Database for persistence and transactional state
+  mysql:
+    image: mysql:8.0
+    container_name: medvision-mysql
     restart: unless-stopped
     environment:
-      POSTGRES_DB: medvision
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      MYSQL_ROOT_PASSWORD: Thando3376!
+      MYSQL_DATABASE: medvision
     ports:
-      - "5433:5432"
+      - "3306:3306"
     volumes:
-      - medvision-postgres-data:/var/lib/postgresql/data
+      - medvision-mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d medvision"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pThando3376!"]
       interval: 10s
       timeout: 5s
       retries: 5
- 
+
+  # Redis for the Celery work queue and result backend
+  redis:
+    image: redis:7-alpine
+    container_name: medvision-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # The AI Inference API (FastAPI)
+  inference-api:
+    build: 
+      context: ./inference-service
+    container_name: medvision-inference-api
+    restart: unless-stopped
+    environment:
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=Thando3376!
+      - MYSQL_HOST=mysql
+      - MYSQL_DATABASE=medvision
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app:app --host 0.0.0.0 --port 8000
+
+  # The Celery Worker (Runs the actual AI models)
+  inference-worker:
+    build:
+      context: ./inference-service
+    container_name: medvision-inference-worker
+    restart: unless-stopped
+    environment:
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=Thando3376!
+      - MYSQL_HOST=mysql
+      - MYSQL_DATABASE=medvision
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A tasks worker --loglevel=info -Q main_queue
+
 volumes:
-  medvision-postgres-data:
+  medvision-mysql-data:
