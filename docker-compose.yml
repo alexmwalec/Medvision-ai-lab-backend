@@ -49,6 +49,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    entrypoint: []
     command: uvicorn app:app --host 0.0.0.0 --port 8000
 
   #The Celery Worker (Runs the actual AI models)
