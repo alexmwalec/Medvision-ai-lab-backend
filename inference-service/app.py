@@ -1,10 +1,11 @@
 import uuid
 from fastapi import FastAPI, File, HTTPException, UploadFile, Query, Header, Depends
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
+
 import base64
 
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 from database import SessionLocal, AnalysisJob, JobStatus, init_db
 from tasks import celery_app, process_analysis_task
 
@@ -35,11 +36,13 @@ def readiness():
 
         return {"status": "ready"}
 
-    except Exception:
+    except Exception as e:
+        print(f"Readiness check failed: {type(e).__name__}: {e}")
         raise HTTPException(
             status_code=503,
             detail="Service dependencies not ready"
         )
+
 
 @app.post("/predict")
 async def predict(
