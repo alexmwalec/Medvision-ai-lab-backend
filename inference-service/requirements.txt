@@ -19,3 +19,4 @@ celery==5.4.0
 redis==5.0.8
 python-dotenv==1.0.1
 
+cryptography>=42.0.0
