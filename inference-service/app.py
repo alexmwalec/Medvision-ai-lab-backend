@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import base64
 
+from sqlalchemy import text
 from database import SessionLocal, AnalysisJob, JobStatus, init_db
 from tasks import celery_app, process_analysis_task
 
@@ -27,12 +28,18 @@ def liveness():
 def readiness():
     try:
         db = SessionLocal()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db.close()
-        celery_app.control.ping()
+
+        celery_app.control.ping(timeout=2.0)
+
         return {"status": "ready"}
+
     except Exception:
-        raise HTTPException(status_code=503, detail="Service dependencies not ready")
+        raise HTTPException(
+            status_code=503,
+            detail="Service dependencies not ready"
+        )
 
 @app.post("/predict")
 async def predict(

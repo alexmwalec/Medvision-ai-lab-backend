@@ -1,75 +1,119 @@
 services:
-  #MySQL Database for persistence and transactional state
+
+  # MySQL Database
   mysql:
     image: mysql:8.0
     container_name: medvision-mysql
     restart: unless-stopped
+
     environment:
       MYSQL_ROOT_PASSWORD: Thando3376!
       MYSQL_DATABASE: medvision
+
     ports:
       - "3306:3306"
+
     volumes:
       - medvision-mysql-data:/var/lib/mysql
+
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pThando3376!"]
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "root",
+          "-pThando3376!"
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  #Redis for the Celery work queue and result backend
+
+  # Redis - Celery message broker
   redis:
     image: redis:7-alpine
     container_name: medvision-redis
     restart: unless-stopped
+
     ports:
       - "6379:6379"
+
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  #The AI Inference API (FastAPI)
+
+  # MedVision AI Inference API
   inference-api:
-    build: 
-      context: ./inference-service
+    image: backend-inference-api:latest
     container_name: medvision-inference-api
     restart: unless-stopped
+
     environment:
-      - MYSQL_USER=root
-      - MYSQL_PASSWORD=Thando3376!
-      - MYSQL_HOST=mysql
-      - MYSQL_DATABASE=medvision
-      - REDIS_URL=redis://redis:6379/0
+      MYSQL_USER: root
+      MYSQL_PASSWORD: Thando3376!
+      MYSQL_HOST: mysql
+      MYSQL_DATABASE: medvision
+      REDIS_URL: redis://redis:6379/0
+
     ports:
       - "8000:8000"
+
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
-    entrypoint: []
-    command: uvicorn app:app --host 0.0.0.0 --port 8000
 
-  #The Celery Worker (Runs the actual AI models)
+    entrypoint: []
+
+    command:
+      - python
+      - -m
+      - uvicorn
+      - app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+
+
+  # MedVision AI Celery Worker
   inference-worker:
-    build:
-      context: ./inference-service
+    image: backend-inference-api:latest
     container_name: medvision-inference-worker
     restart: unless-stopped
+
     environment:
-      - MYSQL_USER=root
-      - MYSQL_PASSWORD=Thando3376!
-      - MYSQL_HOST=mysql
-      - MYSQL_DATABASE=medvision
-      - REDIS_URL=redis://redis:6379/0
+      MYSQL_USER: root
+      MYSQL_PASSWORD: Thando3376!
+      MYSQL_HOST: mysql
+      MYSQL_DATABASE: medvision
+      REDIS_URL: redis://redis:6379/0
+
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A tasks worker --loglevel=info -Q main_queue
+
+    entrypoint: []
+
+    command:
+      - celery
+      - -A
+      - tasks
+      - worker
+      - --loglevel=info
+      - -Q
+      - main_queue
+
 
 volumes:
   medvision-mysql-data:
