@@ -1,15 +1,33 @@
 import uuid
-from fastapi import FastAPI, File, HTTPException, UploadFile, Query, Header, Depends
+from fastapi import (
+    FastAPI,
+    File,
+    HTTPException,
+    UploadFile,
+    Query,
+    Header,
+    Depends,
+    Form,
+)
+
 from fastapi.responses import JSONResponse
 
 import base64
 
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from database import SessionLocal, AnalysisJob, JobStatus, init_db
 from tasks import celery_app, process_analysis_task
 
 app = FastAPI(title="MedVision AI Enterprise Service")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Initialize database tables
 init_db()
@@ -43,31 +61,75 @@ def readiness():
             detail="Service dependencies not ready"
         )
 
-
 @app.post("/predict")
 async def predict(
     file: UploadFile = File(...),
+    externalPatientId: str = Form(...),
+    patientName: str = Form(...),
+    age: int = Form(...),
+    gender: str = Form(...),
+    scanDate: str = Form(...),
+    scanType: str = Form(...),
+    clinicalSymptoms: str = Form(""),
+    clinicalHistory: str = Form(""),
     threshold: float = Query(0.5),
     explain_top_n: int = Query(1),
     idempotency_key: str = Header(None, alias="X-Idempotency-Key"),
     db: Session = Depends(get_db)
 ):
     key = idempotency_key or str(uuid.uuid4())
-    
-    existing = db.query(AnalysisJob).filter(AnalysisJob.idempotency_key == key).first()
+
+    existing = (
+        db.query(AnalysisJob)
+        .filter(AnalysisJob.idempotency_key == key)
+        .first()
+    )
+
     if existing:
-        return {"job_id": existing.id, "status": existing.status.value, "findings": existing.findings}
+        return {
+            "job_id": existing.id,
+            "status": existing.status.value,
+            "findings": existing.findings,
+        }
 
     job_id = str(uuid.uuid4())
-    job = AnalysisJob(id=job_id, idempotency_key=key, status=JobStatus.PENDING)
-    
+
+    job = AnalysisJob(
+        id=job_id,
+        idempotency_key=key,
+        status=JobStatus.PENDING,
+    )
+
     try:
         db.add(job)
         db.commit()
-        
-        img_b64 = base64.b64encode(await file.read()).decode("utf-8")
-        process_analysis_task.delay(job_id, img_b64, threshold, explain_top_n)
-        return {"job_id": job_id, "status": "pending"}
+
+        image_bytes = await file.read()
+        img_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+        process_analysis_task.delay(
+            job_id,
+            img_b64,
+            threshold,
+            explain_top_n,
+        )
+
+        return {
+            "job_id": job_id,
+            "status": "pending",
+            "patient": {
+                "id": externalPatientId,
+                "patientId": externalPatientId,
+                "name": patientName,
+                "age": age,
+                "gender": gender,
+                "date": scanDate,
+                "scanType": scanType,
+                "clinicalSymptoms": clinicalSymptoms,
+                "clinicalHistory": clinicalHistory,
+            },
+        }
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
