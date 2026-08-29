@@ -18,7 +18,7 @@ SERVICE_DIR = Path(__file__).resolve().parent
 # Keep the bundled checkpoint path independent of the directory Uvicorn is run
 # from. MODEL_PATH may still be used to provide a different checkpoint.
 DEFAULT_CHECKPOINT_PATH = os.environ.get(
-    "MODEL_PATH", str(SERVICE_DIR / "model" / "finetune_best .pt")
+    "MODEL_PATH", str(SERVICE_DIR / "model" / "finetune_best.pt")
 )
 
 

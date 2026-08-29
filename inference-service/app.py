@@ -1,81 +1,79 @@
-import base64
-import io
-
-import cv2
-import numpy as np
-import torch
-from fastapi import FastAPI, File, UploadFile, Query
+import uuid
+from fastapi import FastAPI, File, HTTPException, UploadFile, Query, Header, Depends
 from fastapi.responses import JSONResponse
-from PIL import Image
-from torchvision import transforms
 
-from gradcam import overlay_heatmap, extract_bounding_box
-from model_loader import model_bundle
+import base64
 
-LABELS = model_bundle.labels
-NUM_CLASSES = len(LABELS)
-DEVICE = model_bundle.device
-model = model_bundle.model
-gradcam = model_bundle.gradcam
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from database import SessionLocal, AnalysisJob, JobStatus, init_db
+from tasks import celery_app, process_analysis_task
 
-preprocess = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
+app = FastAPI(title="MedVision AI Enterprise Service")
 
-app = FastAPI(title="MedVision AI Inference Service")
+# Initialize database tables
+init_db()
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 @app.get("/health")
-def health():
-    return {"status": "ok", "device": str(DEVICE)}
+def liveness():
+    return {"status": "ok"}
+
+@app.get("/ready")
+def readiness():
+    try:
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+
+        celery_app.control.ping(timeout=2.0)
+
+        return {"status": "ready"}
+
+    except Exception as e:
+        print(f"Readiness check failed: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="Service dependencies not ready"
+        )
 
 
 @app.post("/predict")
 async def predict(
     file: UploadFile = File(...),
-    threshold: float = Query(0.5, description="Score above which a disease counts as 'positive'"),
-    explain_top_n: int = Query(1, description="Generate Grad-CAM for the top N positive findings"),
+    threshold: float = Query(0.5),
+    explain_top_n: int = Query(1),
+    idempotency_key: str = Header(None, alias="X-Idempotency-Key"),
+    db: Session = Depends(get_db)
 ):
-    # --- Load + preprocess image ---
-    raw_bytes = await file.read()
-    pil_img = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
-    input_tensor = preprocess(pil_img).unsqueeze(0).to(DEVICE)
+    key = idempotency_key or str(uuid.uuid4())
+    
+    existing = db.query(AnalysisJob).filter(AnalysisJob.idempotency_key == key).first()
+    if existing:
+        return {"job_id": existing.id, "status": existing.status.value, "findings": existing.findings}
 
-    # Keep a resized BGR copy of the original for heatmap overlay
-    display_img = np.array(pil_img.resize((224, 224)))
-    display_img_bgr = cv2.cvtColor(display_img, cv2.COLOR_RGB2BGR)
+    job_id = str(uuid.uuid4())
+    job = AnalysisJob(id=job_id, idempotency_key=key, status=JobStatus.PENDING)
+    
+    try:
+        db.add(job)
+        db.commit()
+        
+        img_b64 = base64.b64encode(await file.read()).decode("utf-8")
+        process_analysis_task.delay(job_id, img_b64, threshold, explain_top_n)
+        return {"job_id": job_id, "status": "pending"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # --- Predictions branch ---
-    with torch.no_grad():
-        logits = model(input_tensor)
-        probs = torch.sigmoid(logits)[0].cpu().numpy()
-
-    findings = [
-        {"disease": LABELS[i], "score": float(probs[i]), "positive": bool(probs[i] >= threshold)}
-        for i in range(NUM_CLASSES)
-    ]
-    findings.sort(key=lambda f: f["score"], reverse=True)
-
-    # --- Grad-CAM branch: explain the top N positive findings ---
-    top_positive = [f for f in findings if f["positive"]][:explain_top_n]
-    explanations = []
-    for f in top_positive:
-        class_idx = LABELS.index(f["disease"])
-        cam, score_check = gradcam.generate(input_tensor, class_idx)
-        overlay = overlay_heatmap(cam, display_img_bgr)
-        bbox = extract_bounding_box(cam)
-        _, buf = cv2.imencode(".png", overlay)
-        overlay_b64 = base64.b64encode(buf).decode("utf-8")
-        explanations.append({
-            "disease": f["disease"],
-            "score": f["score"],
-            "heatmap_png_base64": overlay_b64,
-            "bounding_box": bbox,  # {x, y, width, height} normalized 0-1, or None
-        })
-
-    return JSONResponse({
-        "findings": findings,
-        "explanations": explanations,
-    })
+@app.get("/status/{job_id}")
+async def get_status(job_id: str, db: Session = Depends(get_db)):
+    job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
+    if not job: raise HTTPException(status_code=404, detail="Job not found")
+    return {"job_id": job.id, "status": job.status.value, "findings": job.findings, "error": job.error_message}
