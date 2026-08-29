@@ -45,21 +45,38 @@ def liveness():
 
 @app.get("/ready")
 def readiness():
+    db_ok = False
+    redis_ok = False
+
     try:
         db = SessionLocal()
         db.execute(text("SELECT 1"))
         db.close()
-
-        celery_app.control.ping(timeout=2.0)
-
-        return {"status": "ready"}
-
+        db_ok = True
     except Exception as e:
-        print(f"Readiness check failed: {type(e).__name__}: {e}")
+        print(f"MySQL readiness failed: {type(e).__name__}: {e}")
+
+    try:
+        result = celery_app.control.ping(timeout=2.0)
+        redis_ok = bool(result)
+        print(f"Celery ping result: {result}")
+    except Exception as e:
+        print(f"Celery readiness failed: {type(e).__name__}: {e}")
+
+    if not db_ok or not redis_ok:
         raise HTTPException(
             status_code=503,
-            detail="Service dependencies not ready"
+            detail={
+                "mysql": db_ok,
+                "celery": redis_ok,
+            },
         )
+
+    return {
+        "status": "ready",
+        "mysql": True,
+        "celery": True,
+    }
 
 @app.post("/predict")
 async def predict(

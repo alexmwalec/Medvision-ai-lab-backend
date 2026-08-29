@@ -52,45 +52,6 @@ class JobStatus(enum.Enum):
     COMPLETED = "completed"
     FAILED = "failed"
 
-
-class Patient(Base):
-    __tablename__ = "patients"
-
-    id = Column(String(50), primary_key=True)
-
-    external_patient_id = Column(
-        String(100),
-        unique=True,
-        index=True,
-        nullable=False,
-    )
-
-    name = Column(String(255), nullable=False)
-    age = Column(String(20), nullable=True)
-    gender = Column(String(50), nullable=True)
-    scan_type = Column(String(100), nullable=True)
-    scan_date = Column(String(50), nullable=True)
-
-    image_url = Column(String(500), nullable=True)
-    heatmap_url = Column(String(500), nullable=True)
-
-    ai_findings = Column(JSON, nullable=True)
-
-    clinical_symptoms = Column(Text, nullable=True)
-    clinical_history = Column(Text, nullable=True)
-
-    created_at = Column(
-        DateTime,
-        default=datetime.utcnow,
-    )
-
-    updated_at = Column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
-    )
-
-
 class AnalysisJob(Base):
     __tablename__ = "analysis_jobs"
 

@@ -38,6 +38,9 @@ services:
       dockerfile: Dockerfile
     container_name: medvision-node-backend
     restart: unless-stopped
+
+    entrypoint: []
+
     environment:
       PORT: 5000
       MYSQL_HOST: mysql
@@ -68,6 +71,9 @@ services:
       dockerfile: Dockerfile
     container_name: medvision-inference-api
     restart: unless-stopped
+   
+    entrypoint: []
+
     environment:
       MYSQL_USER: root
       MYSQL_PASSWORD: Thando3376!
@@ -90,6 +96,7 @@ services:
       dockerfile: Dockerfile
     container_name: medvision-inference-worker
     restart: unless-stopped
+    entrypoint: []
     environment:
       MYSQL_USER: root
       MYSQL_PASSWORD: Thando3376!

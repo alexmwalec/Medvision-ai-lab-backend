@@ -1,12 +1,15 @@
-FROM backend-inference-api:latest
+FROM node:20
 
 WORKDIR /app
 
-RUN mkdir -p /app/model
+COPY package*.json ./
+
+RUN npm install
 
 COPY . .
 
 EXPOSE 5000
 
+ENTRYPOINT []
 
-CMD ["python", "-m",  "uvicorn",  "app:app",   "--host",  "0.0.0.0",  "--port",  "8000"]
+CMD ["node", "server.js"]
