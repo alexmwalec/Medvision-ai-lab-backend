@@ -1,45 +1,53 @@
 services:
 
-  # MySQL Database
   mysql:
     image: mysql:8.0
     container_name: medvision-mysql
     restart: unless-stopped
+
     environment:
       MYSQL_ROOT_PASSWORD: Thando3376!
       MYSQL_DATABASE: medvision
+
     ports:
       - "3306:3306"
+
     volumes:
       - medvision-mysql-data:/var/lib/mysql
+
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pThando3376!"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Redis - Celery message broker
+    networks:
+      - medvision-network
+
   redis:
     image: redis:7-alpine
     container_name: medvision-redis
     restart: unless-stopped
+
     ports:
       - "6379:6379"
+
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Node/Express Application Backend
+    networks:
+      - medvision-network
+
   node-backend:
     build:
       context: .
       dockerfile: Dockerfile
+
     container_name: medvision-node-backend
     restart: unless-stopped
-
-    entrypoint: []
 
     environment:
       PORT: 5000
@@ -51,10 +59,13 @@ services:
       REDIS_URL: redis://redis:6379/0
       INFERENCE_SERVICE_URL: http://inference-api:8000
       FRONTEND_ORIGIN: http://localhost:3000
+
     ports:
       - "5000:5000"
+
     volumes:
       - ./uploads:/app/uploads
+
     depends_on:
       mysql:
         condition: service_healthy
@@ -62,17 +73,18 @@ services:
         condition: service_healthy
       inference-api:
         condition: service_started
-    command: ["node", "app.js"]
 
-  # MedVision AI Inference API
+    networks:
+      - medvision-network
+    
+
   inference-api:
     build:
       context: ./inference-service
       dockerfile: Dockerfile
+
     container_name: medvision-inference-api
     restart: unless-stopped
-   
-    entrypoint: []
 
     environment:
       MYSQL_USER: root
@@ -80,34 +92,69 @@ services:
       MYSQL_HOST: mysql
       MYSQL_DATABASE: medvision
       REDIS_URL: redis://redis:6379/0
+
     ports:
       - "8000:8000"
+
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 
-  # MedVision AI Celery Worker
+    networks:
+      - medvision-network
+
+    command:
+      [
+        "python",
+        "-m",
+        "uvicorn",
+        "app:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ]
+
   inference-worker:
     build:
       context: ./inference-service
       dockerfile: Dockerfile
+
     container_name: medvision-inference-worker
     restart: unless-stopped
-    entrypoint: []
+
     environment:
       MYSQL_USER: root
       MYSQL_PASSWORD: Thando3376!
       MYSQL_HOST: mysql
       MYSQL_DATABASE: medvision
       REDIS_URL: redis://redis:6379/0
+
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A tasks worker --loglevel=info --concurrency=1 -Q main_queue  
+
+    networks:
+      - medvision-network
+
+    command:
+      [
+        "celery",
+        "-A",
+        "tasks",
+        "worker",
+        "--loglevel=info",
+        "-Q",
+        "main_queue"
+      ]
+
 volumes:
   medvision-mysql-data:
+
+networks:
+  medvision-network:
+    driver: bridge

@@ -12,4 +12,4 @@ EXPOSE 5000
 
 ENTRYPOINT []
 
-CMD ["node", "server.js"]
+CMD ["node", "app.js"]
