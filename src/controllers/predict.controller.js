@@ -60,7 +60,18 @@ async function handlePredict(req, res) {
         req.file.buffer,
         req.file.originalname,
         req.file.mimetype,
-        { threshold, explainTopN }
+        { 
+          threshold, 
+          explainTopN,
+          externalPatientId: req.body.externalPatientId,
+          patientName: req.body.patientName,
+          age: req.body.age,
+          gender: req.body.gender,
+          scanDate: req.body.scanDate,
+          scanType: req.body.scanType,
+          clinicalSymptoms: req.body.clinicalSymptoms,
+          clinicalHistory: req.body.clinicalHistory
+        }
       );
     } catch (err) {
       console.error("Inference service call failed:", err.message);
