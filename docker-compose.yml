@@ -149,7 +149,8 @@ services:
         "worker",
         "--loglevel=info",
         "-Q",
-        "main_queue"
+        "main_queue",
+        "--pool=solo"
       ]
 
 volumes:
