@@ -1,5 +1,43 @@
 services:
+  # Orthanc DICOM Archive / DICOMweb Server
 
+  orthanc:
+    image: jodogne/orthanc-plugins:latest
+    container_name: medvision-orthanc
+    restart: unless-stopped
+
+    ports:
+      - "8042:8042"
+      - "4242:4242"
+
+    volumes:
+      - medvision-orthanc-data:/var/lib/orthanc/db
+      - ./dicom/orthanc/orthanc.json:/etc/orthanc/orthanc.json:ro
+
+    networks:
+      - backend_default
+
+  # OHIF DICOM Browser Viewer
+  ohif:
+    image: ohif/app:latest
+    container_name: medvision-ohif
+    restart: unless-stopped
+
+    depends_on:
+      - orthanc
+
+    ports:
+      - "3001:80"
+
+    volumes:
+      - ./dicom/ohif/app-config.js:/usr/share/nginx/html/app-config.js:ro
+      - ./dicom/ohif/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+    networks:
+      - backend_default
+
+  
+ # Database mysql
   mysql:
     image: mysql:8.0
     container_name: medvision-mysql
@@ -24,6 +62,7 @@ services:
     networks:
       - medvision-network
 
+# Redis 
   redis:
     image: redis:7-alpine
     container_name: medvision-redis
@@ -41,6 +80,7 @@ services:
     networks:
       - medvision-network
 
+#node backend
   node-backend:
     build:
       context: .
