@@ -1,0 +1,20 @@
+{
+  "Name": "MedVision Orthanc",
+
+  "RemoteAccessAllowed": true,
+
+  "AuthenticationEnabled": false,
+
+  "DicomAet": "MEDVISION",
+
+  "DicomPort": 4242,
+
+  "HttpPort": 8042,
+
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/",
+    "EnableWado": true,
+    "WadoRoot": "/wado"
+  }
+}
