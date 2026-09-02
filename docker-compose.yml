@@ -195,6 +195,7 @@ services:
 
 volumes:
   medvision-mysql-data:
+  medvision-orthanc-data:
 
 networks:
   medvision-network:
