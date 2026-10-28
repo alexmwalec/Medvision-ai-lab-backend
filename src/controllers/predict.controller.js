@@ -82,7 +82,7 @@ async function handlePredict(req, res) {
       });
     }
 
-    const { findings, explanations } = result;
+    const { findings, explanations, dicom,source_format} = result;
     const topFinding = findings[0]; // findings is sorted by score desc, per app.py
 
     // --- Step 4: save the top finding's heatmap to disk (matches the ---
@@ -98,9 +98,16 @@ async function handlePredict(req, res) {
     }
 
     await patientsRepository.updateAfterInference(patientId, {
+
       imagePath: imageStoragePath,
       heatmapPath,
       priority: priorityFromTopScore(topFinding.score),
+
+      source_format : source_format || null,
+      study_instance_uid: dicom?.study_instance_uid || null,
+      series_instance_uid: dicom?.series_instance_uid || null,
+      sop_instance_uid: dicom?.sop_instance_uid || null,
+      
     });
 
     // --- Step 5: insert one findings row per disease above display threshold ---
@@ -127,8 +134,7 @@ async function handlePredict(req, res) {
       patient,
       imageUrl: patient.imageUrl,
       heatmapUrl: patient.heatmapUrl,
-      // Do not return every model class. The frontend must present only
-      // clinically detected findings, which are persisted with the patient.
+      
       findings: patient.aiFindings,
       aiFindings: patient.aiFindings,
       explanations,

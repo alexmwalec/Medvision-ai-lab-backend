@@ -43,9 +43,7 @@ class ModelBundle:
         in_features = model.classifier.in_features
         model.classifier = nn.Linear(in_features, NUM_CLASSES)
 
-        # This project checkpoint includes NumPy training metadata. PyTorch 2.6
-        # defaults to ``weights_only=True``, which cannot deserialize it.
-        # Only load checkpoints from trusted sources.
+   
         ckpt = torch.load(
             checkpoint_path, map_location=self.device, weights_only=False
         )

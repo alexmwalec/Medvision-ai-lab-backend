@@ -198,5 +198,7 @@ volumes:
   medvision-orthanc-data:
 
 networks:
+  backend_default:
+    driver: bridge 
   medvision-network:
     driver: bridge
