@@ -1,6 +1,6 @@
 const express = require('express');
 const upload = require('../middleware/upload');
-const { handlePredict } = require('../controllers/predict.controller');
+const { handlePredict, handlePreview } = require('../controllers/predict.controller');
 const {
   getPatients,
   getPatientById,
@@ -10,6 +10,7 @@ const {
 const router = express.Router();
 
 router.post('/predict', upload.single('xray'), handlePredict);
+router.post('/preview', upload.single('xray'), handlePreview);
 router.get('/patients', getPatients);
 router.get('/patients/:id', getPatientById);
 router.post('/feedback', requestFeedback);

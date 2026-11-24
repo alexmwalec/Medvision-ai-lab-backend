@@ -13,6 +13,9 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 
 import base64
+import io
+from PIL import Image
+from image_io import decode_uploaded_image
 
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
@@ -77,6 +80,19 @@ def readiness():
         "mysql": True,
         "celery": True,
     }
+
+@app.post("/preview")
+async def preview_image(file: UploadFile = File(...)):
+    """Decode an uploaded scan for the browser's pre-analysis preview."""
+    image_bytes = await file.read()
+    try:
+        decoded = decode_uploaded_image(image_bytes)
+        output = io.BytesIO()
+        decoded.image.save(output, format="PNG")
+        encoded = base64.b64encode(output.getvalue()).decode("ascii")
+        return {"previewDataUrl": f"data:image/png;base64,{encoded}"}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 @app.post("/predict")
 async def predict(
