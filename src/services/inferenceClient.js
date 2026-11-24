@@ -90,7 +90,20 @@ async function predict(fileBuffer, filename, mimetype, options = {}) {
   throw new Error("Inference request timed out during polling");
 }
 
+async function previewImage(fileBuffer, filename, mimetype) {
+  const form = new FormData();
+  form.append("file", fileBuffer, { filename, contentType: mimetype });
+  const response = await axios.post(`${INFERENCE_SERVICE_URL}/preview`, form, {
+    headers: form.getHeaders(),
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+    timeout: REQUEST_TIMEOUT_MS,
+  });
+  return response.data;
+}
+
 module.exports = {
   checkHealth,
   predict,
+  previewImage,
 };

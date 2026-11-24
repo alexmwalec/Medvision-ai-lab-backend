@@ -145,4 +145,18 @@ async function handlePredict(req, res) {
   }
 }
 
-module.exports = { handlePredict };
+async function handlePreview(req, res) {
+  if (!req.file) {
+    return res.status(400).json({ success: false, error: "No scan file was uploaded." });
+  }
+  try {
+    const preview = await inferenceClient.previewImage(req.file.buffer, req.file.originalname, req.file.mimetype);
+    return res.json(preview);
+  } catch (err) {
+    const status = err.response?.status || 502;
+    const message = err.response?.data?.detail || "Unable to decode this image for preview.";
+    return res.status(status).json({ success: false, error: message });
+  }
+}
+
+module.exports = { handlePredict, handlePreview };
